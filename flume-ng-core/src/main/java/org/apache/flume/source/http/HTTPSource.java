@@ -70,6 +70,11 @@ import java.util.Map;
  * unavailable status.
  *
  * A JSON handler which converts JSON objects to Flume events is provided.
+ * 
+ * By default, this source uses an instance of {@linkplain FlumeHTTPServlet}. 
+ * A third party developer can subclass this source and provide her own servlet 
+ * instance, by overriding {@linkplain HTTPSource#getServlet()} and 
+ * {@linkplain FlumeHTTPServlet}.
  *
  */
 public class HTTPSource extends AbstractSource implements
@@ -235,7 +240,7 @@ public class HTTPSource extends AbstractSource implements
    *
    * @return an instance of {@see javax.servlet.http.HttpServlet}
    */
-  protected HttpServlet getServlet() {
+  protected FlumeHTTPServlet getServlet() {
     return new FlumeHTTPServlet();
   }
 

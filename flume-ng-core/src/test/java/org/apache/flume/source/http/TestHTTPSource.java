@@ -22,15 +22,8 @@ import com.google.common.collect.Maps;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import junit.framework.Assert;
-import org.apache.flume.Channel;
-import org.apache.flume.ChannelSelector;
-import org.apache.flume.Context;
 import org.apache.flume.Event;
 import org.apache.flume.Transaction;
-import org.apache.flume.channel.ChannelProcessor;
-import org.apache.flume.channel.MemoryChannel;
-import org.apache.flume.channel.ReplicatingChannelSelector;
-import org.apache.flume.conf.Configurables;
 import org.apache.flume.event.JSONEvent;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpOptions;
@@ -57,13 +50,11 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -73,84 +64,11 @@ import static org.fest.reflect.core.Reflection.field;
 /**
  *
  */
-public class TestHTTPSource {
-
-  private static HTTPSource source;
-  private static HTTPSource httpsSource;
-//  private static Channel httpsChannel;
-
-  private static Channel channel;
-  private static int selectedPort;
-  private static int sslPort;
-  DefaultHttpClient httpClient;
-  HttpPost postRequest;
-
-  private static int findFreePort() throws IOException {
-    ServerSocket socket = new ServerSocket(0);
-    int port = socket.getLocalPort();
-    socket.close();
-    return port;
-  }
-
+public class TestHTTPSource extends AbstractTestHTTPSource {
+  
   @BeforeClass
   public static void setUpClass() throws Exception {
-    selectedPort = findFreePort();
-
-    source = new HTTPSource();
-    channel = new MemoryChannel();
-
-    httpsSource = new HTTPSource();
-    httpsSource.setName("HTTPS Source");
-
-    Context ctx = new Context();
-    ctx.put("capacity", "100");
-    Configurables.configure(channel, ctx);
-
-    List<Channel> channels = new ArrayList<Channel>(1);
-    channels.add(channel);
-
-    ChannelSelector rcs = new ReplicatingChannelSelector();
-    rcs.setChannels(channels);
-
-    source.setChannelProcessor(new ChannelProcessor(rcs));
-
-    channel.start();
-
-    httpsSource.setChannelProcessor(new ChannelProcessor(rcs));
-
-    // HTTP context
-    Context context = new Context();
-
-    context.put("port", String.valueOf(selectedPort));
-    context.put("host", "0.0.0.0");
-
-    // SSL context props
-    Context sslContext = new Context();
-    sslContext.put(HTTPSourceConfigurationConstants.SSL_ENABLED, "true");
-    sslPort = findFreePort();
-    sslContext.put(HTTPSourceConfigurationConstants.CONFIG_PORT,
-                   String.valueOf(sslPort));
-    sslContext.put(HTTPSourceConfigurationConstants.SSL_KEYSTORE_PASSWORD, "password");
-    sslContext.put(HTTPSourceConfigurationConstants.SSL_KEYSTORE,
-                   "src/test/resources/jettykeystore");
-
-    Configurables.configure(source, context);
-    Configurables.configure(httpsSource, sslContext);
-    source.start();
-    httpsSource.start();
-  }
-
-  @AfterClass
-  public static void tearDownClass() throws Exception {
-    source.stop();
-    channel.stop();
-    httpsSource.stop();
-  }
-
-  @Before
-  public void setUp() {
-    httpClient = new DefaultHttpClient();
-    postRequest = new HttpPost("http://0.0.0.0:" + selectedPort);
+    doSetup(new HTTPSource(), new HTTPSource());
   }
 
   @Test
@@ -301,29 +219,6 @@ public class TestHTTPSource {
             response.getStatusLine().getStatusCode());
   }
 
-
-  private ResultWrapper putWithEncoding(String encoding, int n) throws Exception {
-    Type listType = new TypeToken<List<JSONEvent>>() {}.getType();
-    List<JSONEvent> events = Lists.newArrayList();
-    Random rand = new Random();
-    for (int i = 0; i < n; i++) {
-      Map<String, String> input = Maps.newHashMap();
-      for (int j = 0; j < 10; j++) {
-        input.put(String.valueOf(i) + String.valueOf(j), String.valueOf(i));
-      }
-      JSONEvent e = new JSONEvent();
-      e.setHeaders(input);
-      e.setBody(String.valueOf(rand.nextGaussian()).getBytes(encoding));
-      events.add(e);
-    }
-    Gson gson = new Gson();
-    String json = gson.toJson(events, listType);
-    StringEntity input = new StringEntity(json);
-    input.setContentType("application/json; charset=" + encoding);
-    postRequest.setEntity(input);
-    HttpResponse resp = httpClient.execute(postRequest);
-    return new ResultWrapper(resp, events);
-  }
 
   @Test
   public void testHttps() throws Exception {
@@ -487,16 +382,6 @@ public class TestHTTPSource {
           throws Exception {
     List<JSONEvent> events = putWithEncoding(encoding, n).events;
     takeWithEncoding(encoding, n, events);
-  }
-
-  private class ResultWrapper {
-    public final HttpResponse response;
-    public final List<JSONEvent> events;
-
-    public ResultWrapper(HttpResponse resp, List<JSONEvent> events) {
-      this.response = resp;
-      this.events = events;
-    }
   }
 
   private class DisabledProtocolsSocketFactory extends javax.net.ssl.SSLSocketFactory {
